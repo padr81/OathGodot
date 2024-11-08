@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://ddjycvg7j2tba"]
+
+[ext_resource type="Texture2D" uid="uid://dnnrndfvqfk0r" path="res://flora/Tree_88.png" id="1_jla20"]
+
+[node name="Tree88" type="Sprite2D"]
+z_index = 1
+y_sort_enabled = true
+texture = ExtResource("1_jla20")
+offset = Vector2(0, -140)
