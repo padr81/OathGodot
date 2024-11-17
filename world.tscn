@@ -1,7 +1,6 @@
 [gd_scene load_steps=341 format=3 uid="uid://db6lgknb1ctvn"]
 
 [ext_resource type="Texture2D" uid="uid://c7iljqvsusbpr" path="res://Backgrounds/!map17_deadwoods.png" id="1_ifwbs"]
-[ext_resource type="Script" path="res://player_(character_body_2d).gd" id="1_mpmxh"]
 [ext_resource type="Texture2D" uid="uid://2c4rebks4w6s" path="res://Backgrounds/!map18_deadwoods.png" id="2_ed5md"]
 [ext_resource type="Texture2D" uid="uid://btq1gsa1cwj2o" path="res://sprites/playerSprites/%heroooc-undying.png" id="4_4rnih"]
 [ext_resource type="Texture2D" uid="uid://be3wd0qik07cl" path="res://sprites/playerSprites/%herobasic-undying.png" id="4_qb3fm"]
@@ -11,6 +10,147 @@
 [ext_resource type="AudioStream" uid="uid://burlwh4v4gepg" path="res://SE/Equip1.ogg" id="6_r71ab"]
 [ext_resource type="PackedScene" uid="uid://br6ds13s7ful6" path="res://tree_100.tscn" id="7_ydtmk"]
 [ext_resource type="PackedScene" uid="uid://ddjycvg7j2tba" path="res://tree_101.tscn" id="8_c6uys"]
+
+[sub_resource type="GDScript" id="GDScript_awjx3"]
+script/source = "class_name Player
+extends CharacterBody2D
+
+## Player character controller that handles movement, combat, and animations
+##
+## Manages player states, movement, combat actions, and corresponding animations
+## using a directional system based on numpad directions (1-9).
+
+# Enums for better state management
+enum PlayerState { IDLE, WALKING, DASHING, ATTACKING }
+enum FacingDirection { DOWN_LEFT = 1, DOWN = 2, DOWN_RIGHT = 3, LEFT = 4, RIGHT = 6, UP_LEFT = 7, UP = 8, UP_RIGHT = 9 }
+
+# Movement constants
+const BASE_SPEED: float = 200.0
+const DASH_SPEED: float = 400.0
+
+# Character states
+var current_state: PlayerState = PlayerState.IDLE
+var facing_direction: FacingDirection = FacingDirection.DOWN
+var combat_stance: bool = false
+
+# Export variables for easy tweaking in editor
+@export var speed: float = BASE_SPEED:
+	set(value):
+		speed = max(0.0, value)  # Ensure speed is never negative
+
+# Node references
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var weapon_sfx: AudioStreamPlayer2D = $WeaponEquipSFX
+
+func _input(event: InputEvent) -> void:
+	_handle_combat_input(event)
+	_handle_movement_input(event)
+
+func _physics_process(_delta: float) -> void:
+	var direction := _get_input_direction()
+	_update_movement(direction)
+	_update_state(direction)
+	_update_animation()
+
+func _handle_combat_input(event: InputEvent) -> void:
+	if event.is_action_pressed(\"Attack\") and combat_stance and current_state != PlayerState.ATTACKING:
+		_change_state(PlayerState.ATTACKING)
+	
+	if event.is_action_pressed(\"CombatStance\"):
+		toggle_combat_stance()
+
+func _handle_movement_input(event: InputEvent) -> void:
+	if event.is_action_pressed(\"dash\"):
+		_change_state(PlayerState.DASHING)
+	elif event.is_action_released(\"dash\"):
+		_change_state(PlayerState.IDLE)
+
+func _get_input_direction() -> Vector2:
+	var direction := Vector2.ZERO
+	direction.x = Input.get_axis(\"ui_left\", \"ui_right\")
+	direction.y = Input.get_axis(\"ui_up\", \"ui_down\")
+	
+	if direction.length() > 0:
+		direction = direction.normalized()
+		facing_direction = _get_facing_direction(direction)
+	
+	return direction
+
+func _update_movement(direction: Vector2) -> void:
+	if current_state == PlayerState.ATTACKING:
+		velocity = Vector2.ZERO
+	else:
+		var current_speed := DASH_SPEED if current_state == PlayerState.DASHING else speed
+		velocity = direction * current_speed
+	
+	move_and_slide()
+
+func _update_state(direction: Vector2) -> void:
+	if current_state == PlayerState.ATTACKING:
+		return
+		
+	if direction == Vector2.ZERO:
+		_change_state(PlayerState.IDLE)
+	else:
+		_change_state(PlayerState.WALKING if current_state != PlayerState.DASHING else PlayerState.DASHING)
+
+func _update_animation() -> void:
+	var animation_name := _get_animation_name()
+	if sprite.animation != animation_name:
+		sprite.play(animation_name)
+
+func _get_animation_name() -> String:
+	var base_name := \"\"
+	
+	match current_state:
+		PlayerState.ATTACKING:
+			base_name = \"attack\"
+		PlayerState.DASHING:
+			base_name = \"dash\"
+		PlayerState.WALKING:
+			base_name = \"walk\"
+		_:  # IDLE
+			base_name = \"idle\"
+	
+	if combat_stance and current_state != PlayerState.ATTACKING:
+		base_name = \"c\" + base_name.capitalize()
+	
+	return base_name + str(facing_direction)
+
+func _get_facing_direction(direction: Vector2) -> FacingDirection:
+	if direction == Vector2.ZERO:
+		return facing_direction
+	
+	# Convert direction vector to numpad direction
+	if direction.y > 0:  # Down
+		if direction.x > 0: return FacingDirection.DOWN_RIGHT
+		elif direction.x < 0: return FacingDirection.DOWN_LEFT
+		else: return FacingDirection.DOWN
+	elif direction.y < 0:  # Up
+		if direction.x > 0: return FacingDirection.UP_RIGHT
+		elif direction.x < 0: return FacingDirection.UP_LEFT
+		else: return FacingDirection.UP
+	else:  # Middle
+		return FacingDirection.RIGHT if direction.x > 0 else FacingDirection.LEFT
+
+func _change_state(new_state: PlayerState) -> void:
+	if current_state == new_state:
+		return
+		
+	current_state = new_state
+	
+	if new_state == PlayerState.ATTACKING:
+		_handle_attack()
+
+func _handle_attack() -> void:
+	await sprite.animation_finished
+	_change_state(PlayerState.IDLE)
+
+func toggle_combat_stance() -> void:
+	combat_stance = !combat_stance
+	weapon_sfx.play()
+	_update_animation()
+"
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_yi1bt"]
 atlas = ExtResource("4_qb3fm")
@@ -2661,7 +2801,7 @@ texture = ExtResource("2_ed5md")
 z_index = 1
 y_sort_enabled = true
 position = Vector2(-275, 1184)
-script = ExtResource("1_mpmxh")
+script = SubResource("GDScript_awjx3")
 
 [node name="Camera2D" type="Camera2D" parent="Player (CharacterBody2D)"]
 limit_left = 0
